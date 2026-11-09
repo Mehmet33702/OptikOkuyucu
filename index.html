@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Optik Okuyucu Sonuçlandırma</title>
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);
+--bg:#f6f7f9;--card:#fff;--tx:#1b1f27;--mu:#667085;--bd:#d9dde5;--ac:#2563eb;--ok:#16a34a;--no:#dc2626}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0f1218;--card:#181c25;--tx:#e8ebf1;--mu:#98a2b3;--bd:#2a303c;--ac:#60a5fa;--ok:#4ade80;--no:#f87171}}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*:before,*:after{box-sizing:inherit}
+body{margin:0;background:var(--bg);color:var(--tx);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:1100px;margin:0 auto;padding:16px;display:grid;gap:16px;grid-template-columns:320px 1fr}
+@media(max-width:820px){main{grid-template-columns:1fr}}
+h1{font-size:20px;margin:0 0 4px}h2{font-size:14px;margin:0 0 8px;color:var(--mu);text-transform:uppercase;letter-spacing:.04em}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px;margin-bottom:12px}
+label{display:block;font-size:13px;color:var(--mu);margin:8px 0 2px}
+input,textarea,button{font:inherit;color:var(--tx);background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:7px 9px;width:100%}
+input[type=range]{padding:0}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+button{cursor:pointer;background:var(--ac);color:#fff;border:0;font-weight:600;margin-top:10px}
+button.sec{background:var(--bg);color:var(--tx);border:1px solid var(--bd)}
+button:disabled{opacity:.5;cursor:not-allowed}
+.stage{position:relative;line-height:0;border:1px solid var(--bd);border-radius:8px;overflow:hidden;background:#fff}
+.stage canvas{width:100%;height:auto}
+#ov{position:absolute;left:0;top:0;width:100%;height:100%}
+.hint{font-size:13px;color:var(--mu);margin:6px 0 0}
+.nav{display:flex;gap:8px;align-items:center;margin-bottom:8px}.nav button{margin:0;width:auto}.nav span{flex:1;text-align:center}
+.tw{overflow-x:auto;max-height:420px}table{border-collapse:collapse;width:100%;font-size:14px}
+th,td{padding:6px 8px;border-bottom:1px solid var(--bd);text-align:center;white-space:nowrap}
+th{position:sticky;top:0;background:var(--card)}
+tbody tr{cursor:pointer}tbody tr:hover{background:var(--bg)}tbody tr.sel{outline:2px solid var(--ac)}
+td.ok{color:var(--ok)}td.no{color:var(--no)}
+</style>
+</head>
+<body>
+<main>
+<aside>
+  <div class="card">
+    <h1>Optik Okuyucu</h1>
+    <p class="hint">Sınav Cevap Kağıdı (100 soru, A–D) için hazır kalıp. Sayfa, dört siyah köşe işaretine göre otomatik hizalanır. Dosyalar tarayıcınızdan çıkmaz.</p>
+    <label>1. Taranmış PDF</label>
+    <input type="file" id="file" accept="application/pdf">
+  </div>
+  <div class="card">
+    <h2>2. Ayarlar</h2>
+    <div class="row">
+      <div><label>Soru sayısı</label><input type="number" id="nq" value="100" min="1" max="100"></div>
+      <div><label>Hassasiyet <span id="thv">0.25</span></label><input type="range" id="th" min="0.08" max="0.6" step="0.01" value="0.25"></div>
+    </div>
+    <p class="hint">Silik işaretler okunmuyorsa hassasiyeti düşürün, boş baloncuklar işaretli görünüyorsa yükseltin.</p>
+  </div>
+  <div class="card">
+    <h2>3. Cevap anahtarı</h2>
+    <textarea id="key" rows="3" placeholder="Örn: ACDBCDACB…"></textarea>
+    <p class="hint">Harfleri (A–D) art arda yazın; boşluk ve rakamlar yok sayılır. İptal edilen soru için “-” kullanın.</p>
+    <label>veya anahtarı optik formdan oku</label>
+    <input type="file" id="keyfile" accept="application/pdf">
+    <p class="hint" id="keystat">Doğru cevapları işaretlenmiş boş bir formu taratıp yükleyin (PDF’in ilk sayfası okunur).</p>
+    <button id="run" disabled>Tüm sayfaları analiz et</button>
+    <p class="hint" id="status"></p>
+  </div>
+</aside>
+<section>
+  <div class="card">
+    <div class="nav">
+      <button class="sec" id="prev" disabled>‹</button>
+      <span id="pginfo">Sayfa yok</span>
+      <button class="sec" id="next" disabled>›</button>
+    </div>
+    <div class="stage"><canvas id="pg" width="600" height="400"></canvas><canvas id="ov" width="600" height="400"></canvas></div>
+    <p class="hint">Kırmızı artılar bulunan köşe işaretleridir. Halkalar kalıbın baloncuk konumlarıdır; oturmuyorlarsa tarama bozuk demektir. Yeşil: doğru, kırmızı: yanlış/çoklu, yeşil çerçeve: boşun doğrusu.</p>
+  </div>
+  <div class="card" id="resCard" hidden>
+    <h2>Sonuçlar</h2>
+    <div id="summary" class="hint"></div>
+    <div class="tw"><table><thead><tr><th>Sayfa</th><th>Doğru</th><th>Yanlış</th><th>Boş</th><th>Çoklu</th><th>Puan</th></tr></thead><tbody id="tb"></tbody></table></div>
+    <button id="csv" class="sec">CSV’yi kopyala</button>
+    <textarea id="csvout" rows="6" hidden></textarea>
+  </div>
+</section>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<script>
+pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const $=s=>document.querySelector(s), L='ABCD';
+const cv=$('#pg'), ov=$('#ov');
+// Kalıp: siyah köşe işaretlerinin dış köşeleri arasındaki dikdörtgen (631x604 birim) içinde baloncuk merkezleri
+const T={W:631,H:604,bx:[41.5,199.4,357.4,515.4],pitch:26.63,y0:44.9,rp:21.946,r:6.5,rows:25,cols:4,ch:4};
+let pdf=null, cur=1, cache={}, scored=false;
+const nq=()=>Math.min(100,Math.max(1,+$('#nq').value||100));
+const th=()=>+$('#th').value;
+const keyArr=()=>$('#key').value.toUpperCase().replace(/[^A-D\-]/g,'').split('');
+
+async function renderTo(canvas,n,width,doc=pdf){
+  const p=await doc.getPage(n), s=width/p.getViewport({scale:1}).width, vp=p.getViewport({scale:s});
+  canvas.width=Math.round(vp.width); canvas.height=Math.round(vp.height);
+  await p.render({canvasContext:canvas.getContext('2d',{willReadFrequently:true}),viewport:vp}).promise;
+}
+// --- köşe işaretlerini bul
+function findMarks(img,W,H){
+  const d=img.data, N=W*H, dark=new Uint8Array(N);
+  for(let i=0;i<N;i++){const j=i*4; dark[i]=(0.299*d[j]+0.587*d[j+1]+0.114*d[j+2])<90?1:0;}
+  const seen=new Uint8Array(N), st=new Int32Array(N), blobs=[];
+  for(let i=0;i<N;i++){
+    if(!dark[i]||seen[i]) continue;
+    let sp=0; st[sp++]=i; seen[i]=1;
+    let a=0,x0=W,x1=0,y0=H,y1=0,smin=1e9,smax=-1e9,dmin=1e9,dmax=-1e9,pS0,pS1,pD0,pD1;
+    while(sp){
+      const p=st[--sp], x=p%W, y=(p-x)/W; a++;
+      if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y;
+      const s=x+y, dd=x-y;
+      if(s<smin){smin=s;pS0=[x,y];} if(s>smax){smax=s;pS1=[x,y];}
+      if(dd<dmin){dmin=dd;pD0=[x,y];} if(dd>dmax){dmax=dd;pD1=[x,y];}
+      if(x>0&&dark[p-1]&&!seen[p-1]){seen[p-1]=1;st[sp++]=p-1;}
+      if(x<W-1&&dark[p+1]&&!seen[p+1]){seen[p+1]=1;st[sp++]=p+1;}
+      if(y>0&&dark[p-W]&&!seen[p-W]){seen[p-W]=1;st[sp++]=p-W;}
+      if(y<H-1&&dark[p+W]&&!seen[p+W]){seen[p+W]=1;st[sp++]=p+W;}
+    }
+    const bw=x1-x0+1, bh=y1-y0+1, fill=a/(bw*bh);
+    if(a>0.0003*W*W && a<0.004*W*W && fill>0.7 && Math.max(bw/bh,bh/bw)<5)
+      blobs.push({cx:(x0+x1)/2,cy:(y0+y1)/2,tl:pS0,br:pS1,bl:pD0,tr:pD1});
+  }
+  if(blobs.length<4) return null;
+  const pick=f=>blobs.reduce((m,b)=>f(b)>f(m)?b:m);
+  const TL=pick(b=>-(b.cx+b.cy)), BR=pick(b=>b.cx+b.cy), TR=pick(b=>b.cx-b.cy), BL=pick(b=>-(b.cx-b.cy));
+  if(new Set([TL,TR,BL,BR]).size<4) return null;
+  return [TL.tl,TR.tr,BL.bl,BR.br];
+}
+// --- homografi (kalıp birimi -> sayfa pikseli)
+function homography(src,dst){
+  const A=[],b=[];
+  for(let i=0;i<4;i++){const [x,y]=src[i],[u,v]=dst[i];
+    A.push([x,y,1,0,0,0,-u*x,-u*y]);b.push(u);
+    A.push([0,0,0,x,y,1,-v*x,-v*y]);b.push(v);}
+  for(let i=0;i<8;i++){
+    let m=i; for(let r=i+1;r<8;r++) if(Math.abs(A[r][i])>Math.abs(A[m][i])) m=r;
+    [A[i],A[m]]=[A[m],A[i]]; [b[i],b[m]]=[b[m],b[i]];
+    for(let r=i+1;r<8;r++){const f=A[r][i]/A[i][i]; for(let c=i;c<8;c++)A[r][c]-=f*A[i][c]; b[r]-=f*b[i];}
+  }
+  const h=Array(8);
+  for(let i=7;i>=0;i--){let s=b[i];for(let c=i+1;c<8;c++)s-=A[i][c]*h[c];h[i]=s/A[i][i];}
+  return h;
+}
+const ap=(h,x,y)=>{const w=h[6]*x+h[7]*y+1;return [(h[0]*x+h[1]*y+h[2])/w,(h[3]*x+h[4]*y+h[5])/w];};
+function bubbles(){
+  const o=[];
+  for(let q=0;q<100;q++){const b=Math.floor(q/T.rows), r=q%T.rows;
+    for(let k=0;k<T.ch;k++) o.push({q,k,x:T.bx[b]+k*T.pitch,y:T.y0+r*T.rp});}
+  return o;
+}
+async function getRes(n){
+  if(!cache[n]) cache[n]=await analyzePage(n,pdf);
+  return cache[n];
+}
+async function analyzePage(n,doc){
+  const off=document.createElement('canvas'); await renderTo(off,n,1200,doc);
+  const W=off.width,H=off.height, img=off.getContext('2d',{willReadFrequently:true}).getImageData(0,0,W,H);
+  const m=findMarks(img,W,H);
+  if(!m) return {err:true};
+  const h=homography([[0,0],[T.W,0],[0,T.H],[T.W,T.H]],m), dk=Array.from({length:100},()=>Array(4).fill(0)), d=img.data;
+  for(const b of bubbles()){
+    const [cx,cy]=ap(h,b.x,b.y), [ex,ey]=ap(h,b.x+1,b.y), s=Math.hypot(ex-cx,ey-cy), rad=T.r*s*0.6;
+    let sum=0,c=0;
+    for(let y=Math.floor(cy-rad);y<=cy+rad;y++)for(let x=Math.floor(cx-rad);x<=cx+rad;x++){
+      if(x<0||y<0||x>=W||y>=H||(x-cx)**2+(y-cy)**2>rad*rad) continue;
+      const j=(y*W+x)*4; sum+=1-(0.299*d[j]+0.587*d[j+1]+0.114*d[j+2])/255; c++;
+    }
+    dk[b.q][b.k]=c?sum/c:0;
+  }
+  const norm=m.map(([x,y])=>[x/W,y/H]);
+  return {dk,h:homography([[0,0],[T.W,0],[0,T.H],[T.W,T.H]],norm),corners:norm};
+}
+function marksOf(res){
+  const all=res.dk.slice(0,nq()).flat().sort((a,b)=>a-b), base=all[Math.floor(all.length/2)];
+  return res.dk.map(r=>r.map((v,i)=>v>base+th()?i:-1).filter(i=>i>=0));
+}
+// --- önizleme
+async function show(n){
+  cur=n;
+  await renderTo(cv,n,900); ov.width=cv.width; ov.height=cv.height;
+  $('#pginfo').textContent='Sayfa '+n+' / '+pdf.numPages;
+  $('#prev').disabled=n<=1; $('#next').disabled=n>=pdf.numPages;
+  document.querySelectorAll('#tb tr').forEach((tr,i)=>tr.classList.toggle('sel',i===n-1));
+  const res=await getRes(n); if(cur!==n) return;
+  if(res.err) $('#status').textContent='Sayfa '+n+': dört siyah köşe işareti bulunamadı.';
+  draw(res);
+}
+function draw(res){
+  const g=ov.getContext('2d'), W=ov.width, H=ov.height; g.clearRect(0,0,W,H);
+  if(!res||res.err) return;
+  g.strokeStyle='#ef4444'; g.lineWidth=2;
+  for(const [x,y] of res.corners){g.beginPath();g.moveTo(x*W-8,y*H);g.lineTo(x*W+8,y*H);g.moveTo(x*W,y*H-8);g.lineTo(x*W,y*H+8);g.stroke();}
+  const marks=marksOf(res), key=keyArr(), q0=nq();
+  for(const b of bubbles()){
+    if(b.q>=q0) continue;
+    const [cx,cy]=ap(res.h,b.x,b.y), [ex,ey]=ap(res.h,b.x+1,b.y), r=T.r*Math.hypot((ex-cx)*W,(ey-cy)*H);
+    const m=marks[b.q], kq=key[b.q], isKey=kq&&kq!=='-'&&L[b.k]===kq;
+    g.beginPath(); g.arc(cx*W,cy*H,r,0,7);
+    if(m.includes(b.k)){
+      const ok=key.length&&m.length===1&&(isKey||kq==='-');
+      g.fillStyle=!key.length?'rgba(37,99,235,.5)':ok?'rgba(22,163,74,.55)':'rgba(220,38,38,.55)'; g.fill();
+    } else if(isKey&&m.length===0){g.strokeStyle='#16a34a';g.lineWidth=2.5;g.stroke();}
+    else {g.strokeStyle='rgba(37,99,235,.35)';g.lineWidth=1;g.stroke();}
+  }
+}
+$('#prev').onclick=()=>show(cur-1); $('#next').onclick=()=>show(cur+1);
+$('#th').addEventListener('input',e=>{$('#thv').textContent=(+e.target.value).toFixed(2);refresh();});
+$('#key').addEventListener('input',refresh); $('#nq').addEventListener('input',refresh);
+function refresh(){ if(scored) renderResults(); if(pdf&&cache[cur]) draw(cache[cur]); }
+
+$('#file').addEventListener('change',async e=>{
+  const f=e.target.files[0]; if(!f) return;
+  $('#status').textContent='PDF yükleniyor…';
+  try{
+    pdf=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;
+    cache={}; scored=false; $('#resCard').hidden=true; $('#run').disabled=false;
+    $('#status').textContent=pdf.numPages+' sayfa yüklendi.';
+    await show(1);
+  }catch(err){$('#status').textContent='PDF açılamadı: '+err.message;}
+});
+$('#run').onclick=async()=>{
+  $('#run').disabled=true;
+  for(let n=1;n<=pdf.numPages;n++){
+    $('#status').textContent='Okunuyor: '+n+' / '+pdf.numPages;
+    await getRes(n); await new Promise(r=>setTimeout(r));
+  }
+  $('#status').textContent='Tamamlandı.'; $('#run').disabled=false;
+  scored=true; renderResults(); show(cur);
+};
+$('#keyfile').addEventListener('change',async e=>{
+  const f=e.target.files[0]; if(!f) return; const st=$('#keystat');
+  st.textContent='Anahtar okunuyor…';
+  try{
+    const kd=await pdfjsLib.getDocument({data:await f.arrayBuffer()}).promise;
+    const res=await analyzePage(1,kd);
+    if(res.err){st.textContent='Dört siyah köşe işareti bulunamadı, anahtar okunamadı.';return;}
+    const mk=marksOf(res); let last=-1; mk.forEach((m,i)=>{if(m.length) last=i;});
+    if(last<0){st.textContent='Formda işaretli cevap bulunamadı.';return;}
+    let odd=0, k='';
+    for(let i=0;i<=last;i++){ if(mk[i].length===1) k+=L[mk[i][0]]; else {k+='-';odd++;} }
+    $('#key').value=k; $('#nq').value=last+1;
+    st.textContent=(last+1)+' soru okundu.'+(odd?' '+odd+' soru boş veya çoklu işaretli olduğu için “-” (iptal) yapıldı; anahtarı kontrol edin.':' Anahtarı kontrol edin.');
+    refresh();
+  }catch(err){st.textContent='PDF okunamadı: '+err.message;}
+});
+function score(res){
+  if(res.err) return {err:true};
+  const key=keyArr(), q=nq(), mk=marksOf(res); let ok=0,no=0,blank=0,multi=0,valid=0,canc=0;
+  for(let i=0;i<q&&i<key.length;i++){
+    const k=key[i], m=mk[i];
+    if(k==='-'){canc++;continue;} valid++;
+    if(!m.length) blank++; else if(m.length>1) multi++;
+    else if(L[m[0]]===k) ok++; else no++;
+  }
+  const tot=valid+canc;
+  return {ok:ok+canc,no,blank,multi,pts:tot?Math.round((ok+canc)/tot*1000)/10:0,hasKey:key.length>0,mk};
+}
+function renderResults(){
+  $('#resCard').hidden=false;
+  const tb=$('#tb'); tb.innerHTML=''; const sc=[];
+  for(let n=1;n<=pdf.numPages;n++){
+    const s=cache[n]?score(cache[n]):{err:true}; sc.push(s);
+    const tr=document.createElement('tr'); if(n===cur)tr.className='sel';
+    tr.innerHTML=s.err?`<td>${n}</td><td colspan="5" class="no">okunamadı (köşe işaretleri yok)</td>`
+      :`<td>${n}</td><td class="ok">${s.ok}</td><td class="no">${s.no}</td><td>${s.blank}</td><td>${s.multi}</td><td><b>${s.hasKey?s.pts:'–'}</b></td>`;
+    tr.onclick=()=>show(n); tb.appendChild(tr);
+  }
+  const good=sc.filter(s=>!s.err), avg=good.length?good.reduce((a,s)=>a+s.pts,0)/good.length:0;
+  $('#summary').textContent=keyArr().length?`${good.length}/${sc.length} form okundu · ortalama puan ${avg.toFixed(1)}`:'Puanlamak için cevap anahtarını girin.';
+}
+$('#csv').onclick=async()=>{
+  const q=nq(), lines=['Sayfa;Doğru;Yanlış;Boş;Çoklu;Puan;'+Array.from({length:q},(_,i)=>'S'+(i+1)).join(';')];
+  for(let n=1;n<=pdf.numPages;n++){
+    const r=cache[n]; if(!r||r.err){lines.push(n+';okunamadı');continue;}
+    const s=score(r);
+    lines.push([n,s.ok,s.no,s.blank,s.multi,s.pts,...s.mk.slice(0,q).map(m=>m.length?m.map(k=>L[k]).join(''):'-')].join(';'));
+  }
+  const t=lines.join('\n'), o=$('#csvout');
+  try{await navigator.clipboard.writeText(t);$('#csv').textContent='Kopyalandı ✓';setTimeout(()=>$('#csv').textContent='CSV’yi kopyala',1500);}
+  catch(e){o.hidden=false;o.value=t;o.select();}
+};
+</script>
+</body>
+</html>
