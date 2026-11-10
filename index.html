@@ -52,7 +52,7 @@ details{font-size:13px;color:var(--mu);margin-top:8px}details ul{margin:6px 0 0;
 .cambot .hint{color:#cbd5e1}
 @page{size:A4;margin:0}
 #printArea{display:none}
-@media print{body{margin:0;background:#fff}body>main{display:none}#printArea{display:block}}
+@media print{html,body{margin:0;padding:0;background:#fff;height:296mm;overflow:hidden}body>main{display:none}#printArea{display:block;height:296mm;overflow:hidden;page-break-after:avoid;break-after:avoid}#printArea svg{display:block}}
 </style>
 </head>
 <body>
@@ -142,7 +142,8 @@ details{font-size:13px;color:var(--mu);margin-top:8px}details ul{margin:6px 0 0;
 pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const $=s=>document.querySelector(s), L='ABCDE';
 const cv=$('#pg'), ov=$('#ov');
-const VERSION='1.8.1', CHANGES=[
+const VERSION='1.8.2', CHANGES=[
+ ['1.8.2','Yazdır / PDF kaydetmede alta geçen boş ikinci sayfa giderildi.'],
  ['1.8.1','Form hazırlamada varsayılan 4 şık ve 4 sütun.'],
  ['1.8.0','Form: cevap bölümü A4’ün altına hizalandı ve sayfanın %60’ını kaplar (üst %40 aday bilgileri için boş); kamera kartındaki yinelenen “anahtarı okut” seçimi kaldırıldı, anahtar yalnızca 3. bölümden okunur; varsayılan 5 sütun.'],
  ['1.7.0','Form hazırlama: yalnızca cevap bölümü ve dört siyah köşe karesi olan, yazdırılabilir cevap kağıdı üretilir; üretilen form okuma kalıbı olur.'],
