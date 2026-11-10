@@ -326,52 +326,128 @@ $('#shotCsv').onclick=async()=>{
   try{await navigator.clipboard.writeText(t);$('#shotCsv').textContent='Kopyalandı ✓';setTimeout(()=>$('#shotCsv').textContent='Listeyi kopyala (CSV)',1500);}
   catch(e){o.hidden=false;o.value=t;o.select();}
 };
+// ============================================================
+// FORM OLUŞTURMA — A4 alt %60, sıkışık şıklar, hizalı köşe kareleri
+// ============================================================
 function buildForm(q,ch,cols){
-  // Cevap bölümü A4'ün altına hizalı: siyah kareler y=119..287 mm (sayfanın alt %60'ı)
-  const YR=132, rpb=Math.ceil(q/cols), rp=Math.min(9.4,145/rpb), cw=170/cols, pitch=Math.min(10,(cw-11)/ch), r=Math.min(2.9,rp*.3,pitch*.32);
-  const list=[]; let s='';
-  for(let rr=1;rr<rpb;rr+=2) s+=`<rect x="20" y="${YR+rr*rp}" width="170" height="${rp}" fill="#f0f0f0"/>`;
-  [[10,119],[192,119],[10,279],[192,279]].forEach(([x,y])=>s+=`<rect x="${x}" y="${y}" width="8" height="8" fill="#000"/>`);
-  s+=`<text x="105" y="125.6" font-size="4.4" font-weight="700" letter-spacing="1.4" text-anchor="middle">CEVAPLAR</text>`;
-  for(let b=1;b<cols;b++) s+=`<line x1="${20+b*cw}" y1="${YR}" x2="${20+b*cw}" y2="${YR+rpb*rp}" stroke="#444" stroke-width=".35"/>`;
+  // A4 = 210 x 297 mm. Cevap bölgesi A4'ün alt %60'ı: y = 118.8 .. 297 mm
+  const TOP=118.8;                    // cevap bölgesi üstü (mm)
+  const MARGIN=10;                    // sol/sağ iç boşluk (mm)
+  const CONTENT_W=210-2*MARGIN;       // 190 mm
+  const BOT=297-8;                    // alt kenardan 8 mm boşluk
+  const AREA_H=BOT-TOP;               // ~170.2 mm
+  
+  // Köşe kareleri: tam olarak cevap alanının sınırlarına (MARGIN ve TOP/BOT)
+  const SQ=8;                         // kare boyutu (mm)
+  const marks=[
+    [MARGIN-SQ/2, TOP-SQ/2],
+    [210-MARGIN-SQ/2, TOP-SQ/2],
+    [MARGIN-SQ/2, BOT-SQ/2],
+    [210-MARGIN-SQ/2, BOT-SQ/2]
+  ];
+
+  const rpb=Math.ceil(q/cols);        // satır/sütun başına soru
+  const headerH=6;                    // "CEVAPLAR" başlığı yüksekliği
+  const gridTop=TOP+headerH;
+  
+  // --- DÜZELTME: Satır yüksekliğini (rp) alana tam sığdır, ama min 4.8mm yap ---
+  const gridH=BOT-gridTop;
+  const rp = Math.min(6.2, gridH/rpb); 
+  
+  // --- DÜZELTME: Sütun genişliği ve şık aralığı (pitch) ---
+  const cw = CONTENT_W/cols;          // sütun genişliği
+  const innerW = cw - 9;              // numara alanı (7mm) + sol boşluk (2mm)
+  const pitch = innerW/ch;            // Şıklar arası sıkı aralık
+  
+  // --- DÜZELTME: Baloncuk yarıçapı ---
+  const r = Math.min(2.8, rp*0.36, pitch*0.32); 
+
+  const list=[];
+  let s='';
+
+  // Köşe kareleri
+  for(const [x,y] of marks) s+=`<rect x="${x}" y="${y}" width="${SQ}" height="${SQ}" fill="#000"/>`;
+
+  // Başlık
+  s+=`<text x="105" y="${TOP+4.5}" font-size="4.8" font-weight="700" letter-spacing="1.4" text-anchor="middle">CEVAPLAR</text>`;
+
+  // Sütun ayırıcılar
+  for(let b=1;b<cols;b++) s+=`<line x1="${MARGIN+b*cw}" y1="${gridTop}" x2="${MARGIN+b*cw}" y2="${gridTop+rpb*rp}" stroke="#555" stroke-width=".4"/>`;
+
+  // Satır bantları (hafif zebra)
+  for(let rr=1;rr<rpb;rr+=2) s+=`<rect x="${MARGIN}" y="${gridTop+rr*rp}" width="${CONTENT_W}" height="${rp}" fill="#f2f2f2"/>`;
+
+  // Baloncuklar
   for(let i=0;i<q;i++){
-    const b=Math.floor(i/rpb), rr=i%rpb, x0=20+b*cw, cy=YR+rr*rp+rp/2;
-    s+=`<text x="${x0+7}" y="${cy+1.1}" font-size="3.2" text-anchor="end">${i+1}</text>`;
+    const b=Math.floor(i/rpb), rr=i%rpb, x0=MARGIN+b*cw, cy=gridTop+rr*rp+rp/2;
+    
+    // Numara
+    s+=`<text x="${x0+7}" y="${cy+1.2}" font-size="3.2" text-anchor="end">${i+1}</text>`;
+    
+    // Şıklar
     for(let k=0;k<ch;k++){
-      const cx=x0+11+k*pitch+pitch/2;
-      s+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#000" stroke-width=".35"/><text x="${cx}" y="${cy+r*.4}" font-size="${r*1.15}" text-anchor="middle">${L[k]}</text>`;
-      list.push({q:i,k,x:cx-10,y:cy-119});
+      const cx=x0+9+k*pitch+pitch/2; // Numara alanından sonra baloncuk merkezleri
+      
+      // Baloncuk dairesi (çizgi kalınlığı .35)
+      s+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#000" stroke-width=".35"/>`
+      
+      // Harf (A, B, C, D)
+        +`<text x="${cx}" y="${cy+r*.42}" font-size="${r*1.2}" text-anchor="middle" font-weight="normal">${L[k]}</text>`;
+        
+      // Kalıp birimleri: köşe karelerinin merkezlerine göre
+      list.push({q:i,k,x:cx-105, y:cy-TOP});
     }
   }
-  const guide='<rect x="10" y="10" width="190" height="100" fill="none" stroke="#bbb" stroke-dasharray="2 2" stroke-width=".4"/><text x="105" y="62" font-size="4" fill="#999" text-anchor="middle">Aday bilgileri alanı (sizin hazırlayacağınız bölüm; çıktıda boş kalır)</text>';
+
+  // Aday bilgileri alanı çerçevesi (üst %40)
+  const guide=`<rect x="${MARGIN}" y="${MARGIN}" width="${210-2*MARGIN}" height="${TOP-2*MARGIN}" fill="none" stroke="#c0c0c0" stroke-dasharray="2 2" stroke-width=".4"/>`
+    +`<text x="105" y="${MARGIN+(TOP-2*MARGIN)/2}" font-size="4.2" fill="#999" text-anchor="middle">Aday bilgileri alanı (sizin hazırlayacağınız bölüm; çıktıda boş kalır)</text>`;
+
   const svg=(w,g)=>`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 297" ${w} font-family="Arial,Helvetica,sans-serif"><rect width="210" height="297" fill="#fff"/>${g?guide:''}${s}</svg>`;
-  return {svg,T:{W:190,H:168,r,nq:q,ch,rows:rpb,cols,list}};
-}
-function applyTpl(v){
-  T=(v==='custom'&&customT)?customT:T0; $('#tplSel').value=(T===customT&&customT)?'custom':'std';
-  cache={}; shots=[]; scored=false; camRes=null; view='pdf'; renderShots(); $('#resCard').hidden=true;
-  $('#nq').value=T.nq; ov.getContext('2d').clearRect(0,0,ov.width,ov.height);
-  if(pdf) show(cur);
-}
-function makeForm(){
-  const cols=Math.min(5,Math.max(1,+$('#fSut').value||4)), ch=Math.min(5,Math.max(2,+$('#fSik').value||4));
-  const q=Math.min(cols*31,Math.max(1,+$('#fSoru').value||100));
-  $('#fSut').value=cols; $('#fSik').value=ch; $('#fSoru').value=q;
-  const f=buildForm(q,ch,cols); customT=f.T;
-  $('#fPrev').innerHTML=f.svg('width="100%"',true); $('#fPrev').hidden=false; $('#fPrint').hidden=false;
-  $('#printArea').innerHTML=f.svg('width="210mm" height="297mm"');
-  applyTpl('custom');
-}
-$('#fMake').onclick=makeForm;
-$('#fPrint').onclick=()=>window.print();
-$('#tplSel').onchange=e=>{ if(e.target.value==='custom'&&!customT) makeForm(); else applyTpl(e.target.value); };
-function closeModal(){$('#modal').hidden=true;}
-$('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();closeCam();}});
-function infoModal(t,msg,mono,act){
-  $('#mbox').innerHTML=`<h2>${t}</h2><p style="margin:8px 0">${msg}</p>${mono?`<p style="font-family:monospace;word-break:break-all;background:var(--bg);padding:8px;border-radius:8px">${mono}</p>`:''}${act?`<button id="mAct">${act.label}</button>`:''}<button id="mClose" class="${act?'sec':''}">Tamam</button>`;
-  $('#modal').hidden=false; $('#mClose').onclick=closeModal;
-  if(act) $('#mAct').onclick=()=>{closeModal();act.fn();};
+
+  // Kalıp koordinatları: Köşe karelerinin dış köşeleri arasındaki dikdörtgen
+  // (Sol üst kare dış köşesi ile sağ alt kare dış köşesi)
+  const T={
+    W: 210-MARGIN+SQ/2 - (MARGIN-SQ/2),
+    H: BOT+SQ/2 - (TOP-SQ/2),
+    bx: [], 
+    pitch: pitch, 
+    y0: 0, 
+    rp: rp, 
+    r: r, 
+    rows: rpb, 
+    cols: cols, 
+    ch: ch, 
+    nq: q, 
+    list: []
+  };
+  
+  // Her sütunun ilk baloncuk merkez x'i (kalıp birimi cinsinden)
+  for(let b=0;b<cols;b++){ 
+    const x0=MARGIN+b*cw; 
+    // Baloncuk merkezinin kalıp birimine göre x koordinatı
+    T.bx.push(x0+9+pitch/2-105); 
+  }
+  
+  // İlk satır merkez y'si (kalıp birimi cinsinden)
+  T.y0 = gridTop + rp/2 - TOP;
+  
+  // list'teki x,y'leri kalıp birimine çevir
+  T.list = list.map(p=>({q:p.q, k:p.k, x:p.x+105, y:p.y+TOP}));
+  // Not: x ve y'yi merkeze (105, TOP) göre değil, sol üst köşeye (0,0) göre tekrar ayarlıyoruz
+  T.list = list.map(p=>({
+    q:p.q, k:p.k, 
+    x: p.x + 105, // Merkezi 0'a çek
+    y: p.y + TOP  // Üst sınırı 0'a çek
+  }));
+  // Son düzeltme: T.W ve T.H sol üst köşeyi (MARGIN-SQ/2, TOP-SQ/2) referans alır
+  T.list = T.list.map(p => ({
+    q: p.q, k: p.k,
+    x: p.x - (MARGIN - SQ/2),
+    y: p.y - (TOP - SQ/2)
+  }));
+
+  return {svg, T};
 }
 function showResultModal(res){
   const s=score(res), key=keyArr(), q=nq(), bad=[];
