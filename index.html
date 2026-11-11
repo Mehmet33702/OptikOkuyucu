@@ -139,7 +139,8 @@ details{font-size:13px;color:var(--mu);margin-top:8px}details ul{margin:6px 0 0;
 pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const $=s=>document.querySelector(s), L='ABCDE';
 const cv=$('#pg'), ov=$('#ov');
-const VERSION='1.10.0', CHANGES=[
+const VERSION='1.11.0', CHANGES=[
+ ['1.11.0','Okuma başarısı: yerel kontrast ölçümü (koyu satır şeritleri, gölge ve parlamada sahte işaret yok), yerel eşikli köşe kare bulma, köşe karelerinin merkezlerinden hizalama, baloncuk çizgilerine göre ince hizalama (kıvrık kağıt), düşük hizalamada ⚠ uyarısı; varsayılan hassasiyet 0,10.'],
  ['1.10.0','Form: cevap alanı sol/alt boşluksuz, dört kare arasında dengeli yerleşim; forma doğrudan tek sayfalık PDF üretimi (boş 2. sayfa sorunu çözüldü); yazdırma ayrı belgeden yapılır; köşe işareti bulma hatası (v1.9.x) giderildi; sonuç tablolarında İptal sütunu.'],
  ['1.8.2','Yazdır / PDF kaydetmede alta geçen boş ikinci sayfa giderildi.'],
  ['1.8.1','Form hazırlamada varsayılan 4 şık ve 4 sütun.'],
@@ -155,7 +156,7 @@ const VERSION='1.10.0', CHANGES=[
 $('#ver').textContent='v'+VERSION;
 $('#chgList').innerHTML=CHANGES.map(([v,t])=>`<li><b>${v}</b> – ${t}</li>`).join('');
 // Kalıp: siyah köşe işaretlerinin dış köşeleri arasındaki dikdörtgen (631x604 birim) içinde baloncuk merkezleri
-const T0={W:631,H:604,bx:[41.5,199.4,357.4,515.4],pitch:26.63,y0:44.9,rp:21.946,r:6.5,rows:25,cols:4,ch:4,nq:100,list:null};
+const T0={W:631,H:604,bx:[41.5,199.4,357.4,515.4],pitch:26.63,y0:44.9,rp:21.946,r:6.5,rows:25,cols:4,ch:4,nq:100,list:null,mk:[[13,16],[605.5,8],[26,596],[618.5,596]]};
 let T=T0;
 let pdf=null, cur=1, cache={}, scored=false;
 const nq=()=>Math.min(T.nq,Math.max(1,+$('#nq').value||T.nq));
@@ -168,39 +169,46 @@ async function renderTo(canvas,n,width,doc=pdf){
   await p.render({canvasContext:canvas.getContext('2d',{willReadFrequently:true}),viewport:vp}).promise;
 }
 // --- köşe işaretlerini bul
-function findMarks(img,W,H){
-  const d=img.data, N=W*H, dark=new Uint8Array(N), S=Math.min(W,H), hist=new Uint32Array(256);
-  for(let i=0;i<N;i++){const j=i*4; hist[(0.299*d[j]+0.587*d[j+1]+0.114*d[j+2])|0]++;}
+function toGray(d,N){const g=new Float32Array(N);for(let i=0;i<N;i++){const j=i*4;g[i]=0.299*d[j]+0.587*d[j+1]+0.114*d[j+2];}return g;}
+function findMarks(g,W,H){
+  const N=W*H, S=Math.min(W,H), hist=new Uint32Array(256);
+  for(let i=0;i<N;i++) hist[g[i]|0]++;
   let acc=0,p90=255; for(let v=0;v<256;v++){acc+=hist[v]; if(acc>=N*0.9){p90=v;break;}}
-  const thr=Math.max(50,Math.min(100,p90*0.4));
-  for(let i=0;i<N;i++){const j=i*4; dark[i]=(0.299*d[j]+0.587*d[j+1]+0.114*d[j+2])<thr?1:0;}
+  // yerel eşik: kağıt gölgeli/aydınlık farklı olsa da siyah kareleri bulur
+  const win=Math.max(15,Math.round(S/8))|1, hw=win>>1, I=new Float64Array((W+1)*(H+1));
+  for(let y=0;y<H;y++){let rs=0;for(let x=0;x<W;x++){rs+=g[y*W+x];I[(y+1)*(W+1)+x+1]=I[y*(W+1)+x+1]+rs;}}
+  const dark=new Uint8Array(N);
+  for(let y=0;y<H;y++){const y0=Math.max(0,y-hw),y1=Math.min(H,y+hw+1);
+    for(let x=0;x<W;x++){const x0=Math.max(0,x-hw),x1=Math.min(W,x+hw+1);
+      const m=(I[y1*(W+1)+x1]-I[y0*(W+1)+x1]-I[y1*(W+1)+x0]+I[y0*(W+1)+x0])/((x1-x0)*(y1-y0));
+      dark[y*W+x]=(g[y*W+x]<m*0.45&&g[y*W+x]<130)?1:0;}}
   const seen=new Uint8Array(N), st=new Int32Array(N), blobs=[];
   for(let i=0;i<N;i++){
     if(!dark[i]||seen[i]) continue;
     let sp=0; st[sp++]=i; seen[i]=1;
-    let a=0,x0=W,x1=0,y0=H,y1=0,smin=1e9,smax=-1e9,dmin=1e9,dmax=-1e9,pS0,pS1,pD0,pD1;
+    let a=0,sx=0,sy=0,x0=W,x1=0,y0=H,y1=0;
     while(sp){
-      const p=st[--sp], x=p%W, y=(p-x)/W; a++;
+      const p=st[--sp], x=p%W, y=(p-x)/W; a++; sx+=x; sy+=y;
       if(x<x0)x0=x; if(x>x1)x1=x; if(y<y0)y0=y; if(y>y1)y1=y;
-      const s=x+y, dd=x-y;
-      if(s<smin){smin=s;pS0=[x,y];} if(s>smax){smax=s;pS1=[x,y];}
-      if(dd<dmin){dmin=dd;pD0=[x,y];} if(dd>dmax){dmax=dd;pD1=[x,y];}
       if(x>0&&dark[p-1]&&!seen[p-1]){seen[p-1]=1;st[sp++]=p-1;}
       if(x<W-1&&dark[p+1]&&!seen[p+1]){seen[p+1]=1;st[sp++]=p+1;}
       if(y>0&&dark[p-W]&&!seen[p-W]){seen[p-W]=1;st[sp++]=p-W;}
       if(y<H-1&&dark[p+W]&&!seen[p+W]){seen[p+W]=1;st[sp++]=p+W;}
     }
     const bw=x1-x0+1, bh=y1-y0+1, fill=a/(bw*bh);
-    if(a>0.0003*S*S && a<0.004*S*S && fill>0.7 && Math.max(bw/bh,bh/bw)<5)
-      blobs.push({cx:(x0+x1)/2,cy:(y0+y1)/2,tl:pS0,br:pS1,bl:pD0,tr:pD1});
+    if(a>0.0003*S*S && a<0.004*S*S && fill>0.7 && Math.max(bw/bh,bh/bw)<5) blobs.push({cx:sx/a,cy:sy/a});
   }
   if(blobs.length<4) return null;
   const pick=f=>blobs.reduce((m,b)=>f(b)>f(m)?b:m);
   const TL=pick(b=>-(b.cx+b.cy)), BR=pick(b=>b.cx+b.cy), TR=pick(b=>b.cx-b.cy), BL=pick(b=>-(b.cx-b.cy));
   if(new Set([TL,TR,BL,BR]).size<4) return null;
-  return [TL.tl,TR.tr,BL.bl,BR.br];
+  const pts=[TL,TR,BL,BR].map(b=>[b.cx,b.cy]);
+  const wM=(Math.hypot(pts[1][0]-pts[0][0],pts[1][1]-pts[0][1])+Math.hypot(pts[3][0]-pts[2][0],pts[3][1]-pts[2][1]))/2;
+  const hM=(Math.hypot(pts[2][0]-pts[0][0],pts[2][1]-pts[0][1])+Math.hypot(pts[3][0]-pts[1][0],pts[3][1]-pts[1][1]))/2;
+  const wT=T.mk[1][0]-T.mk[0][0], hT=T.mk[2][1]-T.mk[0][1];
+  const q=(wM/hM)/(wT/hT); if(q<0.6||q>1.65) return null;
+  return pts;
 }
-// --- homografi (kalıp birimi -> sayfa pikseli)
 function homography(src,dst){
   const A=[],b=[];
   for(let i=0;i<4;i++){const [x,y]=src[i],[u,v]=dst[i];
@@ -219,37 +227,72 @@ const ap=(h,x,y)=>{const w=h[6]*x+h[7]*y+1;return [(h[0]*x+h[1]*y+h[2])/w,(h[3]*
 function bubbles(){
   if(T.list) return T.list;
   const o=[];
-  for(let q=0;q<100;q++){const b=Math.floor(q/T.rows), r=q%T.rows;
+  for(let q=0;q<T.nq;q++){const b=Math.floor(q/T.rows), r=q%T.rows;
     for(let k=0;k<T.ch;k++) o.push({q,k,x:T.bx[b]+k*T.pitch,y:T.y0+r*T.rp});}
   return o;
 }
-async function getRes(n){
-  if(!cache[n]) cache[n]=await analyzePage(n,pdf);
-  return cache[n];
+const px=(g,W,H,x,y)=>{const xi=Math.round(x),yi=Math.round(y);return (xi<0||yi<0||xi>=W||yi>=H)?255:g[yi*W+xi];};
+function geom(h,b){
+  const [cx,cy]=ap(h,b.x,b.y), [ex,ey]=ap(h,b.x+1,b.y), [fx,fy]=ap(h,b.x,b.y+1);
+  return {cx,cy,rx:T.r*Math.hypot(ex-cx,ey-cy),ry:T.r*Math.hypot(fx-cx,fy-cy)};
 }
-async function analyzePage(n,doc){
-  const off=document.createElement('canvas'); await renderTo(off,n,1200,doc);
-  return analyzeCanvas(off);
+// çizgi (halka) kanıtı: dış halka ile baloncuk çizgisi arasındaki fark -> hizalama ölçütü
+function alignScore(g,W,H,h,list){
+  let s=0,n=0;
+  for(const b of list){
+    const {cx,cy,rx,ry}=geom(h,b); if(rx<2) continue;
+    let o=0,e=0;
+    for(let a=0;a<8;a++){const t=a*Math.PI/4,c=Math.cos(t),si=Math.sin(t);
+      o+=Math.min(px(g,W,H,cx+.9*rx*c,cy+.9*ry*si),px(g,W,H,cx+rx*c,cy+ry*si),px(g,W,H,cx+1.1*rx*c,cy+1.1*ry*si));
+      e+=px(g,W,H,cx+1.45*rx*c,cy+1.45*ry*si);}
+    s+=(e-o)/8/255; n++;
+  }
+  return n?s/n:0;
+}
+function refine(g,W,H,pts,list){
+  let best=pts.map(p=>p.slice()), bs=alignScore(g,W,H,homography(T.mk,best),list);
+  const start=bs;
+  for(const step of [3,1.5,.75]){
+    for(let it=0;it<3;it++){let imp=false;
+      for(let i=0;i<4;i++) for(const [dx,dy] of [[step,0],[-step,0],[0,step],[0,-step]]){
+        const t=best.map(p=>p.slice()); t[i][0]+=dx; t[i][1]+=dy;
+        const sc=alignScore(g,W,H,homography(T.mk,t),list);
+        if(sc>bs+1e-4){bs=sc;best=t;imp=true;}
+      }
+      if(!imp) break;
+    }
+  }
+  return {pts:best,score:bs,start};
+}
+function ellMean(g,W,H,cx,cy,rx,ry){
+  let s=0,c=0;
+  for(let y=Math.floor(cy-ry);y<=cy+ry;y++){ if(y<0||y>=H) continue;
+    for(let x=Math.floor(cx-rx);x<=cx+rx;x++){ if(x<0||x>=W) continue;
+      const dx=(x-cx)/rx, dy=(y-cy)/ry; if(dx*dx+dy*dy>1) continue; s+=g[y*W+x]; c++; } }
+  return c?s/c:255;
+}
+function ringMed(g,W,H,cx,cy,rx,ry,a,b){
+  const arr=[];
+  for(let y=Math.floor(cy-ry*b);y<=cy+ry*b;y++){ if(y<0||y>=H) continue;
+    for(let x=Math.floor(cx-rx*b);x<=cx+rx*b;x++){ if(x<0||x>=W) continue;
+      const dx=(x-cx)/rx, dy=(y-cy)/ry, d2=dx*dx+dy*dy; if(d2>b*b||d2<a*a) continue; arr.push(g[y*W+x]); } }
+  if(!arr.length) return 255; arr.sort((p,q)=>p-q); return arr[arr.length>>1];
 }
 function analyzeCanvas(off){
   const W=off.width,H=off.height, img=off.getContext('2d',{willReadFrequently:true}).getImageData(0,0,W,H);
-  const m=findMarks(img,W,H);
-  if(!m) return {err:true};
-  const h=homography([[0,0],[T.W,0],[0,T.H],[T.W,T.H]],m), dk=Array.from({length:T.nq},()=>Array(T.ch).fill(0)), d=img.data;
-  for(const b of bubbles()){
-    const [cx,cy]=ap(h,b.x,b.y), [ex,ey]=ap(h,b.x+1,b.y), s=Math.hypot(ex-cx,ey-cy), rad=T.r*s*0.6;
-    let sum=0,c=0;
-    for(let y=Math.floor(cy-rad);y<=cy+rad;y++)for(let x=Math.floor(cx-rad);x<=cx+rad;x++){
-      if(x<0||y<0||x>=W||y>=H||(x-cx)**2+(y-cy)**2>rad*rad) continue;
-      const j=(y*W+x)*4; sum+=1-(0.299*d[j]+0.587*d[j+1]+0.114*d[j+2])/255; c++;
-    }
-    dk[b.q][b.k]=c?sum/c:0;
+  const g=toGray(img.data,W*H), pts0=findMarks(g,W,H);
+  if(!pts0) return {err:true};
+  const list=bubbles(), ref=refine(g,W,H,pts0,list), h=homography(T.mk,ref.pts);
+  const dk=Array.from({length:T.nq},()=>Array(T.ch).fill(0));
+  for(const b of list){
+    const {cx,cy,rx,ry}=geom(h,b); if(rx<1||ry<1) continue;
+    const inner=ellMean(g,W,H,cx,cy,rx*.62,ry*.62), ring=ringMed(g,W,H,cx,cy,rx,ry,1.25,1.65);
+    dk[b.q][b.k]=Math.max(0,1-inner/Math.max(ring,30));
   }
-  const norm=m.map(([x,y])=>[x/W,y/H]);
-  return {dk,h:homography([[0,0],[T.W,0],[0,T.H],[T.W,T.H]],norm),corners:norm};
+  const norm=ref.pts.map(([x,y])=>[x/W,y/H]);
+  return {dk,h:homography(T.mk,norm),corners:norm,align:ref.score,align0:ref.start};
 }
 function marksOf(res){
-  // Her sütun bloğu ve şık için boş baloncuk seviyesi (harf biçimi ve ışık farkı elenir)
   const R=T.rows, nb=Math.ceil(res.dk.length/R), c=res.dk[0].length, base=[];
   for(let b=0;b<nb;b++){base[b]=[];for(let k=0;k<c;k++){
     const col=res.dk.slice(b*R,b*R+R).map(r=>r[k]).sort((x,y)=>x-y); base[b][k]=col[Math.floor(col.length*0.3)];}}
@@ -257,6 +300,15 @@ function marksOf(res){
     const b=Math.floor(q/R), e=r.map((v,k)=>v-base[b][k]), mx=Math.max(...e);
     return e.map((x,k)=>x>=th()&&x>=0.5*mx?k:-1).filter(k=>k>=0);
   });
+}
+
+async function getRes(n){
+  if(!cache[n]) cache[n]=await analyzePage(n,pdf);
+  return cache[n];
+}
+async function analyzePage(n,doc){
+  const off=document.createElement('canvas'); await renderTo(off,n,1200,doc);
+  return analyzeCanvas(off);
 }
 // --- önizleme
 async function show(n){
@@ -386,7 +438,7 @@ function buildForm(q,ch,cols){
     out+='xref\n0 7\n0000000000 65535 f \n'+off.slice(1).map(o=>String(o).padStart(10,'0')+' 00000 n \n').join('')+`trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n${xr}\n%%EOF`;
     return new Blob([out],{type:'application/pdf'});
   };
-  return {svg,pdf,T:{W:X1-X0,H:BOT-TOP,r,nq:q,ch,rows:rpb,cols,list}};
+  return {svg,pdf,T:{W:X1-X0,H:BOT-TOP,r,nq:q,ch,rows:rpb,cols,list,mk:[[SQ/2,SQ/2],[X1-X0-SQ/2,SQ/2],[SQ/2,BOT-TOP-SQ/2],[X1-X0-SQ/2,BOT-TOP-SQ/2]]}};
 }
 function applyTpl(v){
   T=(v==='custom'&&customT)?customT:T0; $('#tplSel').value=(T===customT&&customT)?'custom':'std';
@@ -425,6 +477,8 @@ function infoModal(t,msg,mono,act){
   $('#modal').hidden=false; $('#mClose').onclick=closeModal;
   if(act) $('#mAct').onclick=()=>{closeModal();act.fn();};
 }
+const weak=res=>res&&!res.err&&res.align<0.2;
+const WARN='<p class="hint" style="color:var(--no)"><b>⚠ Hizalama zayıf, sonuç güvenilir olmayabilir.</b> Kağıdı tam çerçeveye alıp düz, net ve iyi ışıkta tekrar çekin.</p>';
 function showResultModal(res){
   const s=score(res), key=keyArr(), q=nq(), bad=[];
   if(s.hasKey) for(let i=0;i<q&&i<key.length;i++){
@@ -434,7 +488,7 @@ function showResultModal(res){
   $('#mbox').innerHTML=`<h2>Okuma #${shots.length}</h2><div class="big">${s.hasKey?s.pts:'–'}</div>`
     +`<div class="hint" style="text-align:center">${s.hasKey?'puan':'Puanlamak için cevap anahtarını girin'}</div>`
     +`<div class="stats"><div><b style="color:var(--ok)">${s.ok}</b>Doğru</div><div><b style="color:var(--no)">${s.no}</b>Yanlış</div><div><b>${s.blank}</b>Boş</div><div><b>${s.multi}</b>Çoklu</div></div>`
-    +(bad.length?`<p class="hint"><b>Hatalı / boş sorular</b> (okunan → doğru)</p><p style="font-size:13px;margin:4px 0 0;line-height:1.8">${bad.join(' · ')}</p>`:'')
+    +(weak(res)?WARN:'')+(bad.length?`<p class="hint"><b>Hatalı / boş sorular</b> (okunan → doğru)</p><p style="font-size:13px;margin:4px 0 0;line-height:1.8">${bad.join(' · ')}</p>`:'')
     +`<button id="mNext">📷 Sonraki kağıt</button><button id="mClose" class="sec">Tamam</button><button id="mDel" class="sec">Bu okumayı sil</button>`;
   $('#modal').hidden=false; $('#mClose').onclick=closeModal;
   $('#mNext').onclick=()=>{closeModal();openCam('stu');};
@@ -455,6 +509,7 @@ function camScore(){
   const st=$('#camStat');
   if(!camRes||camRes.err){st.textContent='Dört siyah köşe işareti bulunamadı. Formu tam çerçeveye alıp iyi ışıkta tekrar çekin.';return;}
   const s=score(camRes);
+  if(weak(camRes)){st.textContent='⚠ Hizalama zayıf; güvenilir olmayabilir, tekrar çekin.';return;}
   st.textContent=keyArr().length?`Doğru ${s.ok} · Yanlış ${s.no} · Boş ${s.blank} · Çoklu ${s.multi} · Puan ${s.pts}`:'Okundu. Puanlamak için cevap anahtarını girin.';
 }
 async function openCam(mode){
@@ -535,7 +590,7 @@ function renderResults(){
     const s=cache[n]?score(cache[n]):{err:true}; sc.push(s);
     const tr=document.createElement('tr'); if(n===cur)tr.className='sel';
     tr.innerHTML=s.err?`<td>${n}</td><td colspan="5" class="no">okunamadı (köşe işaretleri yok)</td>`
-      :`<td>${n}</td><td class="ok">${s.ok}</td><td class="no">${s.no}</td><td>${s.blank}</td><td>${s.multi}</td><td><b>${s.hasKey?s.pts:'–'}</b></td>`;
+      :`<td>${n}</td><td class="ok">${s.ok}</td><td class="no">${s.no}</td><td>${s.blank}</td><td>${s.multi}</td><td><b>${s.hasKey?s.pts:'–'}</b>${weak(cache[n])?' ⚠':''}</td>`;
     tr.onclick=()=>show(n); tb.appendChild(tr);
   }
   const good=sc.filter(s=>!s.err), avg=good.length?good.reduce((a,s)=>a+s.pts,0)/good.length:0;
