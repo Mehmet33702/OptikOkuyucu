@@ -50,25 +50,6 @@ details{font-size:13px;color:var(--mu);margin-top:8px}details ul{margin:6px 0 0;
 .guide{position:absolute;inset:8% 6%;border:2px dashed rgba(255,255,255,.55);border-radius:8px;pointer-events:none}
 .cambot{padding:10px 14px calc(14px + env(safe-area-inset-bottom,0px));text-align:center}
 .cambot .hint{color:#cbd5e1}
-@page{size:A4;margin:0}
-#printArea{display:none}
-@media print{
-  body{margin:0;background:#fff}
-  body>main{display:none}
-  #printArea{
-    display:block;
-    width: 100%;
-    height: 100vh;     /* Tam sayfa yüksekliği */
-    overflow: hidden;  /* Taşan kısımları gizle */
-    page-break-after: avoid;
-    page-break-inside: avoid;
-  }
-  #printArea svg{
-    display: block;
-    width: 100%;
-    height: 100%;
-  }
-}
 </style>
 </head>
 <body>
@@ -97,11 +78,12 @@ details{font-size:13px;color:var(--mu);margin-top:8px}details ul{margin:6px 0 0;
       <div><label>Sütun</label><input type="number" id="fSut" value="4" min="1" max="5"></div>
     </div>
     <button id="fMake">Formu oluştur</button>
-    <button id="fPrint" class="sec" hidden>Yazdır / PDF olarak kaydet</button>
+    <button id="fPdf" hidden>PDF indir (önerilen)</button>
+    <button id="fPrint" class="sec" hidden>Yazdır</button>
     <div id="fPrev" class="stage" hidden style="margin-top:10px"></div>
     <label>Okunacak form</label>
     <select id="tplSel"><option value="std">Hazır form (100 soru, A–D)</option><option value="custom">Hazırladığım form</option></select>
-    <p class="hint">Form yalnızca cevap bölümünü ve dört siyah köşe karesini içerir; bölüm A4’ün altına hizalıdır ve sayfanın %60’ını kaplar, üst %40 aday bilgileriniz için boş kalır. Yazdırırken ölçeği %100 (gerçek boyut) seçin ve köşe karelerinin kesilmediğinden emin olun. Oluşturduğunuz form otomatik olarak okuma kalıbı olur.</p>
+    <p class="hint">Form yalnızca cevap bölümünü ve dört siyah köşe karesini içerir; bölüm A4’ün altına hizalıdır ve sayfanın %60’ını kaplar, üst %40 aday bilgileriniz için boş kalır. En doğru çıktı için PDF’i indirip PDF görüntüleyicide yazdırın; ölçek “Gerçek boyut / %100” olmalı, “Sayfaya sığdır” seçilmemeli. Oluşturduğunuz form otomatik olarak okuma kalıbı olur.</p>
   </div>
   <div class="card">
     <h2>3. Cevap anahtarı</h2>
@@ -146,7 +128,6 @@ details{font-size:13px;color:var(--mu);margin-top:8px}details ul{margin:6px 0 0;
   </div>
 </section>
 </main>
-<div id="printArea" style="page-break-after: avoid; page-break-before: avoid;"></div>
 <div id="modal" hidden><div id="mbox"></div></div>
 <div id="camModal" hidden>
   <div class="camtop"><b id="camTitle"></b><button id="camClose" class="sec" aria-label="Kapat">✕</button></div>
@@ -158,15 +139,14 @@ details{font-size:13px;color:var(--mu);margin-top:8px}details ul{margin:6px 0 0;
 pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const $=s=>document.querySelector(s), L='ABCDE';
 const cv=$('#pg'), ov=$('#ov');
-const VERSION='1.9.2', CHANGES=[
- ['1.9.2','Yazdırma ekranında oluşan fazladan boş sayfa sorunu (page-break) giderildi.'],
- ['1.9.1','Form: Şıklar arası sıkıştırıldı, baloncuk boyutları optimize edildi ve köşe kareleri tam cevap alanı sınırlarına hizalandı.'],
- ['1.9.0','Okuma doğruluğu: bubbles() sabit 100 sınırı düzeltildi, marksOf medyan taban + göreli eşik, yerel ışık düzeltmeli doluluk örneklemesi, Hartley normalizasyonlu homografi, findMarks esnek filtre, DPI’a duyarlı render, kamera sürekli odak.'],
+const VERSION='1.10.0', CHANGES=[
+ ['1.10.0','Form: cevap alanı sol/alt boşluksuz, dört kare arasında dengeli yerleşim; forma doğrudan tek sayfalık PDF üretimi (boş 2. sayfa sorunu çözüldü); yazdırma ayrı belgeden yapılır; köşe işareti bulma hatası (v1.9.x) giderildi; sonuç tablolarında İptal sütunu.'],
+ ['1.8.2','Yazdır / PDF kaydetmede alta geçen boş ikinci sayfa giderildi.'],
  ['1.8.1','Form hazırlamada varsayılan 4 şık ve 4 sütun.'],
- ['1.8.0','Form: cevap bölümü A4’ün altına hizalandı ve sayfanın %60’ını kaplar.'],
- ['1.7.0','Form hazırlama: yalnızca cevap bölümü ve dört siyah köşe karesi.'],
- ['1.6.0','Kamera tam ekran pencerede açılır, çekimden sonra otomatik kapanır.'],
- ['1.5.0','Okuma iyileştirildi: şık ve sütun bazlı boş baloncuk seviyesi.'],
+ ['1.8.0','Form: cevap bölümü A4’ün altına hizalandı ve sayfanın %60’ını kaplar (üst %40 aday bilgileri için boş); kamera kartındaki yinelenen “anahtarı okut” seçimi kaldırıldı, anahtar yalnızca 3. bölümden okunur; varsayılan 5 sütun.'],
+ ['1.7.0','Form hazırlama: yalnızca cevap bölümü ve dört siyah köşe karesi olan, yazdırılabilir cevap kağıdı üretilir; üretilen form okuma kalıbı olur.'],
+ ['1.6.0','Kamera tam ekran pencerede açılır, çekimden sonra otomatik kapanır; okunamazsa “Tekrar dene” seçeneği çıkar; sürüm numarası ve sürüm notları eklendi.'],
+ ['1.5.0','Okuma iyileştirildi: şık ve sütun bazlı boş baloncuk seviyesi, hafif kurşun kalem ve silinmiş izlere dayanıklılık.'],
  ['1.4.0','Kamera sonuçları pencere (modül) olarak gösterilir.'],
  ['1.3.0','Kamera ile okuma, kamera okumaları listesi ve cevap anahtarını kameradan okuma.'],
  ['1.2.0','Cevap anahtarını taranmış formdan okuma.'],
@@ -174,41 +154,26 @@ const VERSION='1.9.2', CHANGES=[
  ['1.0.0','PDF’ten optik form okuma ve puanlama.']];
 $('#ver').textContent='v'+VERSION;
 $('#chgList').innerHTML=CHANGES.map(([v,t])=>`<li><b>${v}</b> – ${t}</li>`).join('');
-
-// ============================================================
-// VARSAYILAN KALIP (standart 100 soru, A–D)
-// ============================================================
+// Kalıp: siyah köşe işaretlerinin dış köşeleri arasındaki dikdörtgen (631x604 birim) içinde baloncuk merkezleri
 const T0={W:631,H:604,bx:[41.5,199.4,357.4,515.4],pitch:26.63,y0:44.9,rp:21.946,r:6.5,rows:25,cols:4,ch:4,nq:100,list:null};
 let T=T0;
-let pdf=null, cur=1, cache={}, scored=false, view='pdf', camRes=null, stream=null, shots=[], customT=null, camMode='stu';
-
+let pdf=null, cur=1, cache={}, scored=false;
 const nq=()=>Math.min(T.nq,Math.max(1,+$('#nq').value||T.nq));
 const th=()=>+$('#th').value;
 const keyArr=()=>$('#key').value.toUpperCase().replace(/[^A-E\-]/g,'').split('');
 
-// ============================================================
-// PDF render
-// ============================================================
 async function renderTo(canvas,n,width,doc=pdf){
   const p=await doc.getPage(n), s=width/p.getViewport({scale:1}).width, vp=p.getViewport({scale:s});
   canvas.width=Math.round(vp.width); canvas.height=Math.round(vp.height);
   await p.render({canvasContext:canvas.getContext('2d',{willReadFrequently:true}),viewport:vp}).promise;
 }
-
-// ============================================================
-// KÖŞE İŞARETİ BULMA
-// ============================================================
+// --- köşe işaretlerini bul
 function findMarks(img,W,H){
-  const d=img.data, N=W*H, dark=new Uint8Array(N), S=Math.min(W,H);
-  const hist=new Uint32Array(256);
+  const d=img.data, N=W*H, dark=new Uint8Array(N), S=Math.min(W,H), hist=new Uint32Array(256);
   for(let i=0;i<N;i++){const j=i*4; hist[(0.299*d[j]+0.587*d[j+1]+0.114*d[j+2])|0]++;}
   let acc=0,p90=255; for(let v=0;v<256;v++){acc+=hist[v]; if(acc>=N*0.9){p90=v;break;}}
-  const thr=Math.max(40,Math.min(100,p90*0.45));
+  const thr=Math.max(50,Math.min(100,p90*0.4));
   for(let i=0;i<N;i++){const j=i*4; dark[i]=(0.299*d[j]+0.587*d[j+1]+0.114*d[j+2])<thr?1:0;}
-
-  const minA=Math.max(25, 0.00008*S*S);
-  const maxA=0.012*S*S;
-
   const seen=new Uint8Array(N), st=new Int32Array(N), blobs=[];
   for(let i=0;i<N;i++){
     if(!dark[i]||seen[i]) continue;
@@ -226,30 +191,17 @@ function findMarks(img,W,H){
       if(y<H-1&&dark[p+W]&&!seen[p+W]){seen[p+W]=1;st[sp++]=p+W;}
     }
     const bw=x1-x0+1, bh=y1-y0+1, fill=a/(bw*bh);
-    if(a>minA && a<maxA && fill>0.55 && Math.max(bw/bh,bh/bw)<4)
-      blobs.push({cx:(x0+x1)/2,cy:(y0+y1)/2,tl:pS0,br:pS1,bl:pD0,tr:pD1,bw,bh,fill});
+    if(a>0.0003*S*S && a<0.004*S*S && fill>0.7 && Math.max(bw/bh,bh/bw)<5)
+      blobs.push({cx:(x0+x1)/2,cy:(y0+y1)/2,tl:pS0,br:pS1,bl:pD0,tr:pD1});
   }
   if(blobs.length<4) return null;
-
-  blobs.sort((a,b)=>Math.abs(a.bw/a.bh-1)-Math.abs(b.bw/b.bh-1));
-  const cand=blobs.slice(0,Math.min(blobs.length,12));
-
-  const pick=f=>cand.reduce((m,b)=>f(b)>f(m)?b:m);
+  const pick=f=>blobs.reduce((m,b)=>f(b)>f(m)?b:m);
   const TL=pick(b=>-(b.cx+b.cy)), BR=pick(b=>b.cx+b.cy), TR=pick(b=>b.cx-b.cy), BL=pick(b=>-(b.cx-b.cy));
   if(new Set([TL,TR,BL,BR]).size<4) return null;
-
-  const spread = Math.hypot(TR.cx-BL.cx,TR.cy-BL.cy) + Math.hypot(TL.cx-BR.cx,TL.cy-BR.cy);
-  if(spread < 0.3*Math.hypot(W,H)) return null;
-  if((TL.cx+TL.cy) >= (BR.cx+BR.cy)) return null;
-  if((TR.cx-TR.cy) <= (BL.cx-BL.cy)) return null;
-
   return [TL.tl,TR.tr,BL.bl,BR.br];
 }
-
-// ============================================================
-// HOMOGRAFİ
-// ============================================================
-function dl8(src,dst){
+// --- homografi (kalıp birimi -> sayfa pikseli)
+function homography(src,dst){
   const A=[],b=[];
   for(let i=0;i<4;i++){const [x,y]=src[i],[u,v]=dst[i];
     A.push([x,y,1,0,0,0,-u*x,-u*y]);b.push(u);
@@ -263,141 +215,50 @@ function dl8(src,dst){
   for(let i=7;i>=0;i--){let s=b[i];for(let c=i+1;c<8;c++)s-=A[i][c]*h[c];h[i]=s/A[i][i];}
   return h;
 }
-function mul3(A,B){
-  return [0,1,2].map(i=>[0,1,2].map(j=>A[i*3]*B[j]+A[i*3+1]*B[3+j]+A[i*3+2]*B[6+j]));
-}
-function inv3(M){
-  const [a,b,c,d,e,f,g,h,i]=M.flat();
-  const det=a*(e*i-f*h)-b*(d*i-f*g)+c*(d*h-e*g)||1e-12;
-  return [ (e*i-f*h)/det, (c*h-b*i)/det, (b*f-c*e)/det,
-           (f*g-d*i)/det, (a*i-c*g)/det, (c*d-a*f)/det,
-           (d*h-e*g)/det, (b*g-a*h)/det, (a*e-b*d)/det ];
-}
-function homography(src,dst){
-  const norm=(pts)=>{
-    let cx=0,cy=0; for(const [x,y] of pts){cx+=x;cy+=y;} cx/=4;cy/=4;
-    let d=0; for(const [x,y] of pts) d+=Math.hypot(x-cx,y-cy); d/=4;
-    const s=Math.SQRT2/(d||1);
-    return {m:[s,0,-s*cx, 0,s,-s*cy, 0,0,1], pts:pts.map(([x,y])=>[(x-cx)*s,(y-cy)*s])};
-  };
-  const A=norm(src), B=norm(dst);
-  const h=dl8(A.pts,B.pts);
-  const H=[h[0],h[1],h[2], h[3],h[4],h[5], h[6],h[7],1];
-  const G=mul3(inv3(B.m), mul3(H, A.m));
-  const w=G[8]||1e-12;
-  return [G[0]/w,G[1]/w,G[2]/w, G[3]/w,G[4]/w,G[5]/w, G[6]/w,G[7]/w];
-}
 const ap=(h,x,y)=>{const w=h[6]*x+h[7]*y+1;return [(h[0]*x+h[1]*y+h[2])/w,(h[3]*x+h[4]*y+h[5])/w];};
-
-// ============================================================
-// BALONCUK LİSTESİ
-// ============================================================
 function bubbles(){
   if(T.list) return T.list;
-  const o=[], rows=T.rows, n=T.nq;
-  for(let q=0;q<n;q++){
-    const b=Math.floor(q/rows), r=q%rows;
-    for(let k=0;k<T.ch;k++) o.push({q,k,x:T.bx[b]+k*T.pitch,y:T.y0+r*T.rp});
-  }
+  const o=[];
+  for(let q=0;q<100;q++){const b=Math.floor(q/T.rows), r=q%T.rows;
+    for(let k=0;k<T.ch;k++) o.push({q,k,x:T.bx[b]+k*T.pitch,y:T.y0+r*T.rp});}
   return o;
 }
-
-// ============================================================
-// ANALİZ
-// ============================================================
 async function getRes(n){
   if(!cache[n]) cache[n]=await analyzePage(n,pdf);
   return cache[n];
 }
 async function analyzePage(n,doc){
-  const off=document.createElement('canvas');
-  await renderTo(off,n,1200,doc);
-  const est = (T.r/T.W) * off.width * 2;
-  if(est < 8){ await renderTo(off,n,1800,doc); }
+  const off=document.createElement('canvas'); await renderTo(off,n,1200,doc);
   return analyzeCanvas(off);
 }
-
-function sampleBubble(d,W,H,cx,cy,rx,ry){
-  let sum=0, cnt=0;
-  for(let y=Math.floor(cy-ry);y<=cy+ry;y++){
-    if(y<0||y>=H) continue;
-    for(let x=Math.floor(cx-rx);x<=cx+rx;x++){
-      if(x<0||x>=W) continue;
-      const dx=(x-cx)/rx, dy=(y-cy)/ry;
-      if(dx*dx+dy*dy>1) continue;
-      const j=(y*W+x)*4;
-      sum+=(0.299*d[j]+0.587*d[j+1]+0.114*d[j+2])/255; cnt++;
-    }
-  }
-  return {mean:cnt?sum/cnt:1, cnt};
-}
-function ringMedian(d,W,H,cx,cy,rx0,ry0,rx1,ry1){
-  const arr=[];
-  for(let y=Math.floor(cy-ry1);y<=cy+ry1;y++){
-    if(y<0||y>=H) continue;
-    for(let x=Math.floor(cx-rx1);x<=cx+rx1;x++){
-      if(x<0||x>=W) continue;
-      const dx=(x-cx), dy=(y-cy);
-      const ex=dx/rx1, ey=dy/ry1, ix=dx/rx0, iy=dy/ry0;
-      if(ex*ex+ey*ey>1) continue;
-      if(ix*ix+iy*iy<1) continue;
-      const j=(y*W+x)*4;
-      arr.push((0.299*d[j]+0.587*d[j+1]+0.114*d[j+2])/255);
-    }
-  }
-  if(!arr.length) return 1;
-  arr.sort((a,b)=>a-b);
-  return arr[Math.floor(arr.length*0.5)];
-}
-
 function analyzeCanvas(off){
   const W=off.width,H=off.height, img=off.getContext('2d',{willReadFrequently:true}).getImageData(0,0,W,H);
   const m=findMarks(img,W,H);
   if(!m) return {err:true};
-  const h=homography([[0,0],[T.W,0],[0,T.H],[T.W,T.H]],m);
-  const dk=Array.from({length:T.nq},()=>Array(T.ch).fill(0)), d=img.data;
+  const h=homography([[0,0],[T.W,0],[0,T.H],[T.W,T.H]],m), dk=Array.from({length:T.nq},()=>Array(T.ch).fill(0)), d=img.data;
   for(const b of bubbles()){
-    const [cx,cy]=ap(h,b.x,b.y);
-    const [exx,exy]=ap(h,b.x+1,b.y);
-    const [eyx,eyy]=ap(h,b.x,b.y+1);
-    const rx=T.r*Math.hypot(exx-cx,exy-cy);
-    const ry=T.r*Math.hypot(eyx-cx,eyy-cy);
-    if(rx<0.5||ry<0.5) continue;
-    const inner=sampleBubble(d,W,H,cx,cy,rx*0.72,ry*0.72);
-    const ring=ringMedian(d,W,H,cx,cy,rx*1.05,ry*1.05,rx*1.55,ry*1.55);
-    dk[b.q][b.k]=Math.max(0, ring-inner.mean);
+    const [cx,cy]=ap(h,b.x,b.y), [ex,ey]=ap(h,b.x+1,b.y), s=Math.hypot(ex-cx,ey-cy), rad=T.r*s*0.6;
+    let sum=0,c=0;
+    for(let y=Math.floor(cy-rad);y<=cy+rad;y++)for(let x=Math.floor(cx-rad);x<=cx+rad;x++){
+      if(x<0||y<0||x>=W||y>=H||(x-cx)**2+(y-cy)**2>rad*rad) continue;
+      const j=(y*W+x)*4; sum+=1-(0.299*d[j]+0.587*d[j+1]+0.114*d[j+2])/255; c++;
+    }
+    dk[b.q][b.k]=c?sum/c:0;
   }
   const norm=m.map(([x,y])=>[x/W,y/H]);
   return {dk,h:homography([[0,0],[T.W,0],[0,T.H],[T.W,T.H]],norm),corners:norm};
 }
-
-// ============================================================
-// İŞARET ÇIKARIMI
-// ============================================================
 function marksOf(res){
-  const R=T.rows, C=T.ch, dk=res.dk, nb=Math.ceil(dk.length/R);
-  const base=[];
-  for(let b=0;b<nb;b++){base[b]=[];
-    for(let k=0;k<C;k++){
-      const col=dk.slice(b*R,b*R+R).map(r=>r[k]).sort((x,y)=>x-y);
-      base[b][k]=col[Math.floor(col.length*0.5)]||0;
-    }
-  }
-  const rowBase=dk.map(r=>{
-    const s=[...r].sort((a,b)=>a-b);
-    return s[Math.floor(C*0.5)]||0;
-  });
-  return dk.map((r,q)=>{
-    const b=Math.floor(q/R);
-    const e=r.map((v,k)=>Math.max(0, v-base[b][k]-rowBase[q]*0.5));
-    const mx=Math.max(...e);
-    return e.map((x,k)=> x>=th() && x>=0.45*mx ? k:-1).filter(k=>k>=0);
+  // Her sütun bloğu ve şık için boş baloncuk seviyesi (harf biçimi ve ışık farkı elenir)
+  const R=T.rows, nb=Math.ceil(res.dk.length/R), c=res.dk[0].length, base=[];
+  for(let b=0;b<nb;b++){base[b]=[];for(let k=0;k<c;k++){
+    const col=res.dk.slice(b*R,b*R+R).map(r=>r[k]).sort((x,y)=>x-y); base[b][k]=col[Math.floor(col.length*0.3)];}}
+  return res.dk.map((r,q)=>{
+    const b=Math.floor(q/R), e=r.map((v,k)=>v-base[b][k]), mx=Math.max(...e);
+    return e.map((x,k)=>x>=th()&&x>=0.5*mx?k:-1).filter(k=>k>=0);
   });
 }
-
-// ============================================================
-// ÖNİZLEME
-// ============================================================
+// --- önizleme
 async function show(n){
   cur=n; view='pdf';
   await renderTo(cv,n,900); ov.width=cv.width; ov.height=cv.height;
@@ -431,9 +292,6 @@ $('#th').addEventListener('input',e=>{$('#thv').textContent=(+e.target.value).to
 $('#key').addEventListener('input',refresh); $('#nq').addEventListener('input',refresh);
 function refresh(){ renderShots(); if(scored) renderResults(); if(view==='cam'){draw(camRes);camScore();} else if(pdf&&cache[cur]) draw(cache[cur]); }
 
-// ============================================================
-// PDF YÜKLEME / ANALİZ
-// ============================================================
 $('#file').addEventListener('change',async e=>{
   const f=e.target.files[0]; if(!f) return;
   $('#status').textContent='PDF yükleniyor…';
@@ -453,10 +311,7 @@ $('#run').onclick=async()=>{
   $('#status').textContent='Tamamlandı.'; $('#run').disabled=false;
   scored=true; renderResults(); show(cur);
 };
-
-// ============================================================
-// KAMERA SONUÇ LİSTESİ
-// ============================================================
+let view='pdf',camRes=null,stream=null,shots=[],customT=null,camMode='stu',customForm=null;
 function renderShots(){
   $('#shotCard').hidden=!shots.length;
   $('#shotTb').innerHTML=shots.map((r,i)=>{const s=score(r);return `<tr><td>${i+1}</td><td class="ok">${s.ok}</td><td class="no">${s.no}</td><td>${s.blank}</td><td>${s.multi}</td><td><b>${s.hasKey?s.pts:'–'}</b></td></tr>`;}).join('');
@@ -469,121 +324,70 @@ $('#shotCsv').onclick=async()=>{
   try{await navigator.clipboard.writeText(t);$('#shotCsv').textContent='Kopyalandı ✓';setTimeout(()=>$('#shotCsv').textContent='Listeyi kopyala (CSV)',1500);}
   catch(e){o.hidden=false;o.value=t;o.select();}
 };
-
-// ============================================================
-// FORM OLUŞTURMA — A4 alt %60, sıkışık şıklar, hizalı köşe kareleri
-// ============================================================
 function buildForm(q,ch,cols){
-  // A4 = 210 x 297 mm. Cevap bölgesi A4'ün alt %60'ı: y = 118.8 .. 297 mm
-  const TOP=118.8;                    // cevap bölgesi üstü (mm)
-  const MARGIN=10;                    // sol/sağ iç boşluk (mm)
-  const CONTENT_W=210-2*MARGIN;       // 190 mm
-  const BOT=297-8;                    // alt kenardan 8 mm boşluk
-  const AREA_H=BOT-TOP;               // ~170.2 mm
-  
-  // Köşe kareleri: tam olarak cevap alanının sınırlarına (MARGIN ve TOP/BOT)
-  const SQ=8;                         // kare boyutu (mm)
-  const marks=[
-    [MARGIN-SQ/2, TOP-SQ/2],
-    [210-MARGIN-SQ/2, TOP-SQ/2],
-    [MARGIN-SQ/2, BOT-SQ/2],
-    [210-MARGIN-SQ/2, BOT-SQ/2]
-  ];
-
-  const rpb=Math.ceil(q/cols);        // satır/sütun başına soru
-  const headerH=6;                    // "CEVAPLAR" başlığı yüksekliği
-  const gridTop=TOP+headerH;
-  
-  // Satır yüksekliğini (rp) alana tam sığdır, ama min 4.8mm yap
-  const gridH=BOT-gridTop;
-  const rp = Math.min(6.2, gridH/rpb); 
-  
-  // Sütun genişliği ve şık aralığı (pitch)
-  const cw = CONTENT_W/cols;          // sütun genişliği
-  const innerW = cw - 9;              // numara alanı (7mm) + sol boşluk (2mm)
-  const pitch = innerW/ch;            // Şıklar arası sıkı aralık
-  
-  // Baloncuk yarıçapı
-  const r = Math.min(2.8, rp*0.36, pitch*0.32); 
-
-  const list=[];
-  let s='';
-
-  // Köşe kareleri
-  for(const [x,y] of marks) s+=`<rect x="${x}" y="${y}" width="${SQ}" height="${SQ}" fill="#000"/>`;
-
-  // Başlık
-  s+=`<text x="105" y="${TOP+4.5}" font-size="4.8" font-weight="700" letter-spacing="1.4" text-anchor="middle">CEVAPLAR</text>`;
-
-  // Sütun ayırıcılar
-  for(let b=1;b<cols;b++) s+=`<line x1="${MARGIN+b*cw}" y1="${gridTop}" x2="${MARGIN+b*cw}" y2="${gridTop+rpb*rp}" stroke="#555" stroke-width=".4"/>`;
-
-  // Satır bantları (hafif zebra)
-  for(let rr=1;rr<rpb;rr+=2) s+=`<rect x="${MARGIN}" y="${gridTop+rr*rp}" width="${CONTENT_W}" height="${rp}" fill="#f2f2f2"/>`;
-
-  // Baloncuklar
+  // A4 (210x297 mm). Dört siyah kare cevap bölümünün köşeleridir; bölüm sayfanın alt %60'ında.
+  const SQ=8, X0=8, X1=202, TOP=118.8, BOT=289;            // karelerin dış sınırları (mm)
+  const GY0=TOP+SQ+2, GY1=BOT-SQ-1.5;                      // satırların başladığı / bittiği yer
+  const rpb=Math.ceil(q/cols), rp=Math.min(9.4,(GY1-GY0)/rpb), cw=(X1-X0)/cols;
+  const r=Math.min(2.9,rp*.36,(cw-13)/ch*.32), pitch=(cw-13-2*r)/(ch-1);   // soldaki/sağdaki boşluk eşit (3,5 mm)
+  const P=[], list=[];
+  for(let rr=1;rr<rpb;rr+=2) P.push({t:'rect',x:X0,y:GY0+rr*rp,w:X1-X0,h:rp,g:.94});
+  [[X0,TOP],[X1-SQ,TOP],[X0,BOT-SQ],[X1-SQ,BOT-SQ]].forEach(([x,y])=>P.push({t:'rect',x,y,w:SQ,h:SQ,g:0}));
+  P.push({t:'text',x:105,y:TOP+SQ/2+1.6,size:4.4,bold:1,sp:1.4,a:'m',s:'CEVAPLAR'});
+  for(let b=1;b<cols;b++) P.push({t:'line',x1:X0+b*cw,y1:GY0,x2:X0+b*cw,y2:GY0+rpb*rp,w:.4,g:.33});
   for(let i=0;i<q;i++){
-    const b=Math.floor(i/rpb), rr=i%rpb, x0=MARGIN+b*cw, cy=gridTop+rr*rp+rp/2;
-    
-    // Numara
-    s+=`<text x="${x0+7}" y="${cy+1.2}" font-size="3.2" text-anchor="end">${i+1}</text>`;
-    
-    // Şıklar
+    const b=Math.floor(i/rpb), rr=i%rpb, x0=X0+b*cw, cy=GY0+rr*rp+rp/2;
+    P.push({t:'text',x:x0+7,y:cy+1.1,size:3.2,a:'e',s:String(i+1)});
     for(let k=0;k<ch;k++){
-      const cx=x0+9+k*pitch+pitch/2; // Numara alanından sonra baloncuk merkezleri
-      
-      // Baloncuk dairesi (çizgi kalınlığı .35)
-      s+=`<circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#000" stroke-width=".35"/>`
-      
-      // Harf (A, B, C, D)
-        +`<text x="${cx}" y="${cy+r*.42}" font-size="${r*1.2}" text-anchor="middle" font-weight="normal">${L[k]}</text>`;
-        
-      // Kalıp birimleri (Ham koordinatlar)
-      list.push({q:i,k,x:cx,y:cy});
+      const cx=x0+9.5+r+k*pitch;
+      P.push({t:'circle',cx,cy,r,w:.35});
+      P.push({t:'text',x:cx,y:cy+r*.4,size:r*1.15,a:'m',s:L[k]});
+      list.push({q:i,k,x:cx-X0,y:cy-TOP});
     }
   }
-
-  // Aday bilgileri alanı çerçevesi (üst %40)
-  const guide=`<rect x="${MARGIN}" y="${MARGIN}" width="${210-2*MARGIN}" height="${TOP-2*MARGIN}" fill="none" stroke="#c0c0c0" stroke-dasharray="2 2" stroke-width=".4"/>`
-    +`<text x="105" y="${MARGIN+(TOP-2*MARGIN)/2}" font-size="4.2" fill="#999" text-anchor="middle">Aday bilgileri alanı (sizin hazırlayacağınız bölüm; çıktıda boş kalır)</text>`;
-
-  const svg=(w,g)=>`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 297" ${w} font-family="Arial,Helvetica,sans-serif"><rect width="210" height="297" fill="#fff"/>${g?guide:''}${s}</svg>`;
-
-  // Kalıp koordinatları: Köşe karelerinin dış köşeleri arasındaki dikdörtgen
-  const T={
-    W: 210-MARGIN+SQ/2 - (MARGIN-SQ/2),
-    H: BOT+SQ/2 - (TOP-SQ/2),
-    bx: [], 
-    pitch: pitch, 
-    y0: 0, 
-    rp: rp, 
-    r: r, 
-    rows: rpb, 
-    cols: cols, 
-    ch: ch, 
-    nq: q, 
-    list: []
+  const gh=v=>{const h=Math.round(v*255).toString(16).padStart(2,'0');return '#'+h+h+h;};
+  const fills=ans=>ans?P.filter(p=>p.t==='circle').filter((p,i)=>ans[Math.floor(i/ch)]===i%ch):[];
+  const svg=(w,guide,ans)=>{
+    let o=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 210 297" ${w} font-family="Arial,Helvetica,sans-serif"><rect width="210" height="297" fill="#fff"/>`;
+    if(guide) o+='<rect x="10" y="10" width="190" height="100" fill="none" stroke="#bbb" stroke-dasharray="2 2" stroke-width=".4"/><text x="105" y="62" font-size="4" fill="#999" text-anchor="middle">Aday bilgileri alanı (sizin hazırlayacağınız bölüm; çıktıda boş kalır)</text>';
+    for(const p of P){
+      if(p.t==='rect') o+=`<rect x="${p.x}" y="${p.y}" width="${p.w}" height="${p.h}" fill="${gh(p.g)}"/>`;
+      else if(p.t==='line') o+=`<line x1="${p.x1}" y1="${p.y1}" x2="${p.x2}" y2="${p.y2}" stroke="${gh(p.g)}" stroke-width="${p.w}"/>`;
+      else if(p.t==='circle') o+=`<circle cx="${p.cx}" cy="${p.cy}" r="${p.r}" fill="none" stroke="#000" stroke-width="${p.w}"/>`;
+      else o+=`<text x="${p.x}" y="${p.y}" font-size="${p.size}" text-anchor="${p.a==='m'?'middle':p.a==='e'?'end':'start'}"${p.bold?' font-weight="700"':''}${p.sp?` letter-spacing="${p.sp}"`:''}>${p.s}</text>`;
+    }
+    for(const p of fills(ans)) o+=`<circle cx="${p.cx}" cy="${p.cy}" r="${p.r*.95}" fill="#262626"/>`;
+    return o+'</svg>';
   };
-  
-  // Her sütunun ilk baloncuk merkez x'i (kalıp birimi cinsinden)
-  for(let b=0;b<cols;b++){ 
-    const x0=MARGIN+b*cw; 
-    T.bx.push(x0+9+pitch/2 - (MARGIN - SQ/2)); 
-  }
-  
-  // İlk satır merkez y'si (kalıp birimi cinsinden)
-  T.y0 = gridTop + rp/2 - (TOP - SQ/2);
-  
-  // list'teki x,y'leri kalıp birimine çevir
-  T.list = list.map(p=>({
-    q:p.q, k:p.k, 
-    x: p.x - (MARGIN - SQ/2),
-    y: p.y - (TOP - SQ/2)
-  }));
-
-  return {svg, T};
+  // Doğrudan PDF (tek sayfa, A4, vektör). Yalnızca ASCII metin kullanılır.
+  const pdf=ans=>{
+    const mm=72/25.4, PW=210*mm, PH=297*mm, f=n=>(+n).toFixed(3), X=x=>f(x*mm), Y=y=>f(PH-y*mm);
+    const WH={A:667,B:667,C:722,D:722,E:667}, WB={C:722,E:667,V:667,A:722,P:667,L:611,R:722};
+    const tw=p=>{const t=p.bold?WB:WH;let w=0;for(const c of p.s)w+=t[c]||556;return w/1000*p.size+(p.sp||0)*(p.s.length-1);};
+    const circ=(cx,cy,r)=>{const k=.5523*r,pt=(x,y)=>`${X(x)} ${Y(y)}`;
+      return `${pt(cx+r,cy)} m ${pt(cx+r,cy+k)} ${pt(cx+k,cy+r)} ${pt(cx,cy+r)} c ${pt(cx-k,cy+r)} ${pt(cx-r,cy+k)} ${pt(cx-r,cy)} c ${pt(cx-r,cy-k)} ${pt(cx-k,cy-r)} ${pt(cx,cy-r)} c ${pt(cx+k,cy-r)} ${pt(cx+r,cy-k)} ${pt(cx+r,cy)} c h`;};
+    let c='';
+    for(const p of P){
+      if(p.t==='rect') c+=`${f(p.g)} g ${X(p.x)} ${Y(p.y+p.h)} ${f(p.w*mm)} ${f(p.h*mm)} re f\n`;
+      else if(p.t==='line') c+=`${f(p.g)} G ${f(p.w*mm)} w ${X(p.x1)} ${Y(p.y1)} m ${X(p.x2)} ${Y(p.y2)} l S\n`;
+      else if(p.t==='circle') c+=`0 G ${f(p.w*mm)} w ${circ(p.cx,p.cy,p.r)} S\n`;
+      else{const w=tw(p), x0=p.a==='m'?p.x-w/2:p.a==='e'?p.x-w:p.x;
+        c+=`0 g BT /${p.bold?'F2':'F1'} ${f(p.size*mm)} Tf ${f((p.sp||0)*mm)} Tc ${X(x0)} ${Y(p.y)} Td (${p.s}) Tj ET\n`;}
+    }
+    for(const p of fills(ans)) c+=`0.15 g ${circ(p.cx,p.cy,p.r*.95)} f\n`;
+    const ob=[null,'<< /Type /Catalog /Pages 2 0 R >>','<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${f(PW)} ${f(PH)}] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>`,
+      `<< /Length ${c.length} >>\nstream\n${c}endstream`,
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>',
+      '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>'];
+    let out='%PDF-1.4\n'; const off=[];
+    for(let i=1;i<=6;i++){off[i]=out.length; out+=`${i} 0 obj\n${ob[i]}\nendobj\n`;}
+    const xr=out.length;
+    out+='xref\n0 7\n0000000000 65535 f \n'+off.slice(1).map(o=>String(o).padStart(10,'0')+' 00000 n \n').join('')+`trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n${xr}\n%%EOF`;
+    return new Blob([out],{type:'application/pdf'});
+  };
+  return {svg,pdf,T:{W:X1-X0,H:BOT-TOP,r,nq:q,ch,rows:rpb,cols,list}};
 }
-
 function applyTpl(v){
   T=(v==='custom'&&customT)?customT:T0; $('#tplSel').value=(T===customT&&customT)?'custom':'std';
   cache={}; shots=[]; scored=false; camRes=null; view='pdf'; renderShots(); $('#resCard').hidden=true;
@@ -594,18 +398,25 @@ function makeForm(){
   const cols=Math.min(5,Math.max(1,+$('#fSut').value||4)), ch=Math.min(5,Math.max(2,+$('#fSik').value||4));
   const q=Math.min(cols*31,Math.max(1,+$('#fSoru').value||100));
   $('#fSut').value=cols; $('#fSik').value=ch; $('#fSoru').value=q;
-  const f=buildForm(q,ch,cols); customT=f.T;
-  $('#fPrev').innerHTML=f.svg('width="100%"',true); $('#fPrev').hidden=false; $('#fPrint').hidden=false;
-  $('#printArea').innerHTML=f.svg('width="100%" height="100%"');
+  const f=buildForm(q,ch,cols); customT=f.T; customForm=f;
+  $('#fPrev').innerHTML=f.svg('width="100%"',true); $('#fPrev').hidden=false; $('#fPdf').hidden=false; $('#fPrint').hidden=false;
   applyTpl('custom');
 }
 $('#fMake').onclick=makeForm;
-$('#fPrint').onclick=()=>window.print();
+$('#fPdf').onclick=()=>{
+  if(!customForm) return;
+  const u=URL.createObjectURL(customForm.pdf()), a=document.createElement('a');
+  a.href=u; a.download='cevap-kagidi.pdf'; document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(u),5000);
+};
+$('#fPrint').onclick=()=>{
+  if(!customForm) return;
+  const fr=document.createElement('iframe'); fr.style.cssText='position:fixed;right:0;bottom:0;width:0;height:0;border:0';
+  fr.srcdoc='<!doctype html><html><head><meta charset="utf-8"><style>@page{size:A4;margin:0}html,body{margin:0;padding:0;background:#fff;height:296mm;overflow:hidden}svg{display:block;width:210mm;height:296mm}</style></head><body>'+customForm.svg('')+'</body></html>';
+  fr.onload=()=>{fr.contentWindow.focus();fr.contentWindow.print();setTimeout(()=>fr.remove(),3000);};
+  document.body.appendChild(fr);
+};
 $('#tplSel').onchange=e=>{ if(e.target.value==='custom'&&!customT) makeForm(); else applyTpl(e.target.value); };
-
-// ============================================================
-// MODAL
-// ============================================================
 function closeModal(){$('#modal').hidden=true;}
 $('#modal').addEventListener('click',e=>{if(e.target.id==='modal')closeModal();});
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeModal();closeCam();}});
@@ -646,25 +457,13 @@ function camScore(){
   const s=score(camRes);
   st.textContent=keyArr().length?`Doğru ${s.ok} · Yanlış ${s.no} · Boş ${s.blank} · Çoklu ${s.multi} · Puan ${s.pts}`:'Okundu. Puanlamak için cevap anahtarını girin.';
 }
-
-// ============================================================
-// KAMERA
-// ============================================================
 async function openCam(mode){
   camMode=mode||'stu';
   $('#camTitle').textContent=camMode==='key'?'Cevap anahtarını okut':'Öğrenci kağıdını okut';
   $('#camModal').hidden=false;
   try{
     if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) throw new Error('Bu tarayıcı kamera erişimini desteklemiyor.');
-    stream=await navigator.mediaDevices.getUserMedia({
-      video:{
-        facingMode:{ideal:'environment'},
-        width:{ideal:2560}, height:{ideal:1440},
-        focusMode:{ideal:'continuous'},
-        exposureMode:{ideal:'continuous'},
-        whiteBalanceMode:{ideal:'continuous'}
-      },audio:false
-    });
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}},audio:false});
     $('#vid').srcObject=stream;
   }catch(err){
     closeCam();
@@ -679,7 +478,7 @@ $('#camBtn').onclick=()=>openCam('stu');
 $('#camClose').onclick=closeCam;
 $('#snapBtn').onclick=()=>{
   const v=$('#vid'); if(!v.videoWidth) return;
-  const c=document.createElement('canvas'), s=Math.min(1,2200/Math.max(v.videoWidth,v.videoHeight));
+  const c=document.createElement('canvas'), s=Math.min(1,1600/Math.max(v.videoWidth,v.videoHeight));
   c.width=Math.round(v.videoWidth*s); c.height=Math.round(v.videoHeight*s);
   c.getContext('2d',{willReadFrequently:true}).drawImage(v,0,0,c.width,c.height);
   closeCam();
@@ -701,10 +500,6 @@ $('#snapBtn').onclick=()=>{
     else {shots.push(camRes);renderShots();showResultModal(camRes);}
   }
 };
-
-// ============================================================
-// ANAHTAR PDF'TEN
-// ============================================================
 $('#keyfile').addEventListener('change',async e=>{
   const f=e.target.files[0]; if(!f) return; const st=$('#keystat');
   st.textContent='Anahtar okunuyor…';
@@ -721,10 +516,6 @@ $('#keyfile').addEventListener('change',async e=>{
     refresh();
   }catch(err){st.textContent='PDF okunamadı: '+err.message;}
 });
-
-// ============================================================
-// PUANLAMA
-// ============================================================
 function score(res){
   if(res.err) return {err:true};
   const key=keyArr(), q=nq(), mk=marksOf(res); let ok=0,no=0,blank=0,multi=0,valid=0,canc=0;
@@ -735,7 +526,7 @@ function score(res){
     else if(L[m[0]]===k) ok++; else no++;
   }
   const tot=valid+canc;
-  return {ok, no, blank, multi, canc, pts:tot?Math.round((ok+canc)/tot*1000)/10:0, hasKey:key.length>0, mk};
+  return {ok,no,blank,multi,canc,pts:tot?Math.round((ok+canc)/tot*1000)/10:0,hasKey:key.length>0,mk};
 }
 function renderResults(){
   $('#resCard').hidden=false;
