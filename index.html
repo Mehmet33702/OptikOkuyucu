@@ -52,7 +52,23 @@ details{font-size:13px;color:var(--mu);margin-top:8px}details ul{margin:6px 0 0;
 .cambot .hint{color:#cbd5e1}
 @page{size:A4;margin:0}
 #printArea{display:none}
-@media print{body{margin:0;background:#fff}body>main{display:none}#printArea{display:block}}
+@media print{
+  body{margin:0;background:#fff}
+  body>main{display:none}
+  #printArea{
+    display:block;
+    width: 100%;
+    height: 100vh;     /* Tam sayfa yüksekliği */
+    overflow: hidden;  /* Taşan kısımları gizle */
+    page-break-after: avoid;
+    page-break-inside: avoid;
+  }
+  #printArea svg{
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+}
 </style>
 </head>
 <body>
@@ -130,7 +146,7 @@ details{font-size:13px;color:var(--mu);margin-top:8px}details ul{margin:6px 0 0;
   </div>
 </section>
 </main>
-<div id="printArea"></div>
+<div id="printArea" style="page-break-after: avoid; page-break-before: avoid;"></div>
 <div id="modal" hidden><div id="mbox"></div></div>
 <div id="camModal" hidden>
   <div class="camtop"><b id="camTitle"></b><button id="camClose" class="sec" aria-label="Kapat">✕</button></div>
@@ -142,7 +158,8 @@ details{font-size:13px;color:var(--mu);margin-top:8px}details ul{margin:6px 0 0;
 pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 const $=s=>document.querySelector(s), L='ABCDE';
 const cv=$('#pg'), ov=$('#ov');
-const VERSION='1.9.1', CHANGES=[
+const VERSION='1.9.2', CHANGES=[
+ ['1.9.2','Yazdırma ekranında oluşan fazladan boş sayfa sorunu (page-break) giderildi.'],
  ['1.9.1','Form: Şıklar arası sıkıştırıldı, baloncuk boyutları optimize edildi ve köşe kareleri tam cevap alanı sınırlarına hizalandı.'],
  ['1.9.0','Okuma doğruluğu: bubbles() sabit 100 sınırı düzeltildi, marksOf medyan taban + göreli eşik, yerel ışık düzeltmeli doluluk örneklemesi, Hartley normalizasyonlu homografi, findMarks esnek filtre, DPI’a duyarlı render, kamera sürekli odak.'],
  ['1.8.1','Form hazırlamada varsayılan 4 şık ve 4 sütun.'],
@@ -160,7 +177,6 @@ $('#chgList').innerHTML=CHANGES.map(([v,t])=>`<li><b>${v}</b> – ${t}</li>`).jo
 
 // ============================================================
 // VARSAYILAN KALIP (standart 100 soru, A–D)
-// Köşe işaretlerinin dış köşeleri arasındaki dikdörtgen (631x604 birim)
 // ============================================================
 const T0={W:631,H:604,bx:[41.5,199.4,357.4,515.4],pitch:26.63,y0:44.9,rp:21.946,r:6.5,rows:25,cols:4,ch:4,nq:100,list:null};
 let T=T0;
@@ -580,7 +596,7 @@ function makeForm(){
   $('#fSut').value=cols; $('#fSik').value=ch; $('#fSoru').value=q;
   const f=buildForm(q,ch,cols); customT=f.T;
   $('#fPrev').innerHTML=f.svg('width="100%"',true); $('#fPrev').hidden=false; $('#fPrint').hidden=false;
-  $('#printArea').innerHTML=f.svg('width="210mm" height="297mm"');
+  $('#printArea').innerHTML=f.svg('width="100%" height="100%"');
   applyTpl('custom');
 }
 $('#fMake').onclick=makeForm;
