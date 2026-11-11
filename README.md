@@ -1,3 +1,3 @@
 # OptikOkuyucu
-<a href="https://mehmet33702.github.io/OptikOkuyucu/">Mehmet33702.github.io/OptikOkuyucu</a>
+<a href="https://mehmet33702.github.io/OptikOkuyucu/" target="_blank">Mehmet33702.github.io/OptikOkuyucu</a>
 
